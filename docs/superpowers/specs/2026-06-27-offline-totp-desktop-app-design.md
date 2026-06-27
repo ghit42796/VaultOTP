@@ -58,7 +58,8 @@ master key、解密後 secret、TOTP 計算全在 Rust 記憶體中處理。
 ### 模組職責
 | 模組 | 做什麼 | 依賴 |
 |------|--------|------|
-| `vault` | 金鑰推導、AEAD 加解密、記憶體中帳號集合管理、自動上鎖 | `storage` |
+| `vault` | 金鑰推導、AEAD 加解密、記憶體中帳號集合管理、上鎖（手動 / 閒置 / OS 鎖定） | `storage` |
+| `session` | 監聽 OS 工作階段鎖定事件（Win/macOS/Linux），觸發 `vault` 上鎖 | `vault` |
 | `totp` | RFC 6238 code 計算、背景每秒 tick 與事件推送 | `vault`（讀 secret） |
 | `qr` | 圖片檔 / 螢幕區域截圖 → QR 解碼 → otpauth URI | — |
 | `migration` | `otpauth-migration://` Base64 → protobuf → 帳號清單 | — |
@@ -130,6 +131,19 @@ master_password ─┐
 ### 顯示與更新
 Rust 背景每秒 tick，透過 Tauri event 推送各帳號當前 code 與剩餘秒數；
 點擊複製到剪貼簿（可設定數秒後自動清空剪貼簿）。
+
+### 上鎖（手動 + 自動）
+- **手動上鎖 icon**：解鎖狀態下，主畫面工具列顯示一個鎖頭 icon，
+  點擊立即清除記憶體中的 master key 與解密資料，回到解鎖畫面。
+- **閒置自動上鎖**：預設 5 分鐘無操作後自動上鎖（可設定）。
+- **OS 工作階段鎖定時自動上鎖**：當作業系統螢幕鎖定 / 工作階段鎖定時，App 自動上鎖。
+  - **Windows（主要目標）**：由 Rust 後端監聽 `WTSSESSION_CHANGE` /
+    `SESSION_LOCK`（`WM_WTSSESSION_CHANGE` 的 `WTS_SESSION_LOCK`）事件觸發上鎖。
+  - **macOS / Linux（盡力支援）**：macOS 監聽
+    `com.apple.screenIsLocked` 分散式通知；Linux 監聽 D-Bus
+    screensaver / session lock 訊號（`org.freedesktop.ScreenSaver` /
+    `org.freedesktop.login1` `Lock`）。任一平台若無法取得鎖定事件，
+    仍由閒置自動上鎖作為後備。
 
 ### 加密匯出 / 備份
 匯出為獨立加密檔（同一主密碼或另設密碼）；匯入時驗證並合併。
