@@ -41,24 +41,28 @@
   }
 </script>
 
-<div class="import">
-  <button on:click={loadFromFile}>Choose export QR image…</button>
-  <input bind:value={uri} placeholder="…or paste otpauth-migration:// URI" on:change={loadPreview} />
-  {#if error}<p class="error">{error}</p>{/if}
+<div class="vo-form">
+  <button class="vo-ghost" on:click={loadFromFile}>Choose export QR image…</button>
+  <input class="vo-field" bind:value={uri} placeholder="…or paste otpauth-migration:// URI" on:change={loadPreview} />
+  {#if error}<p class="vo-err">{error}</p>{/if}
   {#if preview.length}
-    <ul>
+    <div class="preview">
       {#each preview as p, i}
-        <li><label><input type="checkbox" bind:checked={selected[i]} /> {p.issuer || "—"} · {p.label}</label></li>
+        <label class="prow">
+          <input type="checkbox" bind:checked={selected[i]} />
+          <span class="pi">{p.issuer || "—"}</span>
+          <span class="pl">{p.label}</span>
+        </label>
       {/each}
-    </ul>
-    <button on:click={doImport}>Import selected</button>
+    </div>
+    <button class="vo-primary" on:click={doImport}>Import selected ({selected.filter(Boolean).length})</button>
   {/if}
 </div>
 
 <style>
-  .import { display: flex; flex-direction: column; gap: 10px; }
-  button, input { padding: 9px; }
-  ul { list-style: none; padding: 0; margin: 0; max-height: 200px; overflow-y: auto; }
-  li { padding: 4px 0; }
-  .error { color: #c0392b; font-size: 13px; }
+  .preview { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow: auto; }
+  .prow { display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+  .pi { font-size: 13px; font-weight: 600; color: var(--text); }
+  .pl { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

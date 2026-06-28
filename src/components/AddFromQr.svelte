@@ -33,15 +33,16 @@
 
 </script>
 
-<div class="qr">
-  <button on:click={fromFile} disabled={busy}>Choose image…</button>
-  {#if status}<p>{status}</p>{/if}
-  {#if error}<p class="error">{error}</p>{/if}
+<div class="vo-form">
+  <div class="dropzone">🖼️ Choose a QR image file<br /><span>PNG / JPG containing an otpauth:// code</span></div>
+  <button class="vo-ghost" on:click={fromFile} disabled={busy}>Choose image…</button>
+  {#if status}<p class="status">{status}</p>{/if}
+  {#if error}<p class="vo-err">{error}</p>{/if}
 </div>
 
 <style>
-  .qr { display: flex; flex-direction: column; gap: 10px; }
-  button { padding: 9px; cursor: pointer; }
-  button:disabled { opacity: 0.6; cursor: not-allowed; }
-  .error { color: #c0392b; font-size: 13px; }
+  .dropzone { border: 1.5px dashed var(--border); border-radius: var(--radius-sm);
+    padding: 22px; text-align: center; color: var(--text-muted); font-size: 13px; }
+  .dropzone span { font-size: 11px; }
+  .status { color: var(--text-muted); font-size: 13px; margin: 0; }
 </style>

@@ -15,16 +15,10 @@
   }
 </script>
 
-<div class="form">
-  <input bind:value={issuer} placeholder="Issuer (e.g. GitHub)" />
-  <input bind:value={label} placeholder="Label (e.g. you@example.com)" />
-  <input bind:value={secret} placeholder="Secret key (Base32)" />
-  {#if error}<p class="error">{error}</p>{/if}
-  <button on:click={save} disabled={!issuer || !secret}>Add</button>
+<div class="vo-form">
+  <input class="vo-field" bind:value={issuer} placeholder="Issuer (e.g. GitHub)" />
+  <input class="vo-field" bind:value={label} placeholder="Label (e.g. you@example.com)" />
+  <input class="vo-field" bind:value={secret} placeholder="Secret key (Base32)" style="font-family:var(--font-mono)" />
+  {#if error}<p class="vo-err">{error}</p>{/if}
+  <button class="vo-primary" on:click={save} disabled={!issuer || !secret}>Add</button>
 </div>
-
-<style>
-  .form { display: flex; flex-direction: column; gap: 10px; }
-  input { padding: 9px; }
-  .error { color: #c0392b; font-size: 13px; }
-</style>

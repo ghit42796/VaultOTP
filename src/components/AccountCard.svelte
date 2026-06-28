@@ -2,10 +2,18 @@
   import type { CodeView } from "../lib/types";
   import { createEventDispatcher } from "svelte";
   import { loadSettings } from "../lib/settings";
+  import { initial, badgeColor, groupCode, ringCircumference, ringDashoffset } from "../lib/display";
+
   export let item: CodeView;
   const dispatch = createEventDispatcher();
   const settings = loadSettings();
   let copied = false;
+
+  const PERIOD = 30;
+  const R = 17;
+  const C = ringCircumference(R);
+  $: offset = ringDashoffset(item.remaining, PERIOD, R);
+  $: warn = item.remaining <= 5;
 
   async function copy() {
     await navigator.clipboard.writeText(item.code);
@@ -24,26 +32,62 @@
 </script>
 
 <div class="card">
-  <div class="info">
+  <div class="badge" style="background:{badgeColor(item.issuer)}">{initial(item.issuer)}</div>
+
+  <button class="main" on:click={copy} title="Copy code">
     <span class="issuer">{item.issuer || "—"}</span>
     <span class="label">{item.label}</span>
-  </div>
-  <button class="code" on:click={copy} title="Copy">
-    {item.code.slice(0, 3)} {item.code.slice(3)}
-    <span class="remaining" class:warn={item.remaining <= 5}>{item.remaining}s</span>
+    <span class="code">{groupCode(item.code)}</span>
   </button>
-  {#if copied}<span class="copied">Copied</span>{/if}
-  <button class="del" on:click={() => dispatch("remove", item.id)} title="Delete">🗑</button>
+
+  {#if copied}<span class="toast">Copied ✓</span>{/if}
+
+  <div class="ring" title="{item.remaining}s remaining">
+    <svg width="40" height="40" viewBox="0 0 40 40">
+      <circle class="track" cx="20" cy="20" r={R} stroke-width="3.5" fill="none" />
+      <circle class="fill" class:warn cx="20" cy="20" r={R} stroke-width="3.5"
+        fill="none" stroke-linecap="round"
+        stroke-dasharray={C} stroke-dashoffset={offset} transform="rotate(-90 20 20)" />
+    </svg>
+    <span class="num" class:warn>{item.remaining}</span>
+  </div>
+
+  <button class="del" on:click={() => dispatch("remove", item.id)} title="Delete" aria-label="Delete">🗑</button>
 </div>
 
 <style>
-  .card { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #eee; }
-  .info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-  .issuer { font-weight: 600; }
-  .label { font-size: 12px; color: #777; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .code { font-family: monospace; font-size: 20px; letter-spacing: 2px; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-  .remaining { font-size: 12px; color: #2980b9; }
-  .remaining.warn { color: #c0392b; }
-  .copied { font-size: 12px; color: #27ae60; }
-  .del { background: none; border: none; cursor: pointer; }
+  .card {
+    display: flex; align-items: center; gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); position: relative;
+  }
+  .card:hover { border-color: var(--accent); }
+  .badge {
+    width: 40px; height: 40px; border-radius: 11px; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 17px; color: #fff;
+  }
+  .main {
+    flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+    background: none; border: none; padding: 0; cursor: pointer; text-align: left;
+  }
+  .issuer { font-weight: 600; color: var(--text); }
+  .label { font-size: 12px; color: var(--text-muted);
+           overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .code { font-family: var(--font-mono); font-size: 22px; font-weight: 600;
+          letter-spacing: 3px; color: var(--accent); margin-top: 2px; }
+  .ring { position: relative; width: 40px; height: 40px; flex: 0 0 auto; }
+  .track { stroke: var(--ring-track); }
+  .fill { stroke: var(--ring-fill); transition: stroke-dashoffset .3s linear; }
+  .fill.warn { stroke: var(--danger); }
+  .num { position: absolute; inset: 0; display: flex; align-items: center;
+         justify-content: center; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+  .num.warn { color: var(--danger); }
+  .toast { position: absolute; right: 56px; top: 8px; font-size: 11px;
+           color: var(--success); background: var(--accent-weak);
+           padding: 2px 8px; border-radius: 20px; }
+  .del { background: none; border: none; cursor: pointer; font-size: 14px;
+         opacity: 0; transition: opacity .12s; color: var(--text-muted); }
+  .card:hover .del { opacity: .8; }
 </style>
