@@ -1,4 +1,4 @@
-# 離線 TOTP 桌面應用 — 設計文件
+# VaultOTP — 離線 TOTP 桌面應用設計文件
 
 - **日期：** 2026-06-27
 - **狀態：** 已核准設計，待實作規劃
@@ -71,7 +71,7 @@ master key、解密後 secret、TOTP 計算全在 Rust 記憶體中處理。
 但使用自訂、較簡單的資料格式。**不**追求 KDBX 檔案互通。
 
 ### Vault 檔案結構
-單一檔案，預設位置為使用者設定目錄（例：`~/.config/auth-totp-app/vault.bin`，
+單一檔案，預設位置為使用者設定目錄（例：`~/.config/com.vaultotp.app/vault.bin`，
 各平台依 OS 慣例）。
 
 ```

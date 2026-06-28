@@ -42,3 +42,6 @@ vault.bin
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Superpowers SDD scratch (task briefs, reports, progress ledgers)
+.superpowers/

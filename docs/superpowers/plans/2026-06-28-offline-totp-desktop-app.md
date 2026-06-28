@@ -1,4 +1,4 @@
-# Offline TOTP Desktop App Implementation Plan
+# VaultOTP — Offline TOTP Desktop App Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -45,7 +45,7 @@ src-tauri/target/
 
 ```json
 {
-  "name": "auth-totp-app",
+  "name": "vaultotp",
   "version": "0.1.0",
   "type": "module",
   "scripts": {
@@ -113,7 +113,7 @@ export default { preprocess: vitePreprocess() };
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Auth TOTP</title>
+    <title>VaultOTP</title>
   </head>
   <body>
     <div id="app"></div>
@@ -131,14 +131,14 @@ export default app;
 
 `src/App.svelte`:
 ```svelte
-<main><h1>Auth TOTP</h1></main>
+<main><h1>VaultOTP</h1></main>
 ```
 
 - [ ] **Step 4: Create `src-tauri/Cargo.toml`**
 
 ```toml
 [package]
-name = "auth-totp-app"
+name = "vaultotp"
 version = "0.1.0"
 edition = "2021"
 
@@ -182,9 +182,9 @@ fn main() {
 ```json
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Auth TOTP",
+  "productName": "VaultOTP",
   "version": "0.1.0",
-  "identifier": "com.authtotp.app",
+  "identifier": "com.vaultotp.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -192,7 +192,7 @@ fn main() {
     "beforeBuildCommand": "npm run build"
   },
   "app": {
-    "windows": [{ "title": "Auth TOTP", "width": 420, "height": 680, "resizable": true }],
+    "windows": [{ "title": "VaultOTP", "width": 420, "height": 680, "resizable": true }],
     "security": { "csp": null }
   },
   "plugins": {},
@@ -2153,7 +2153,7 @@ git commit -m "feat: add typed frontend IPC wrapper"
 </script>
 
 <div class="unlock">
-  <h1>🔐 Auth TOTP</h1>
+  <h1>🔐 VaultOTP</h1>
   <p>{exists ? "Enter your master password" : "Create a master password"}</p>
   <input type="password" bind:value={password} placeholder="Master password"
          on:keydown={(e) => e.key === "Enter" && exists && submit()} />
@@ -2305,7 +2305,7 @@ git commit -m "feat: add unlock / create-vault screen with routing"
 </script>
 
 <header>
-  <h1>Auth TOTP</h1>
+  <h1>VaultOTP</h1>
   <div class="actions">
     <button on:click={() => (showAdd = true)} title="Add">＋</button>
     <button on:click={doLock} title="Lock now">🔒</button>
