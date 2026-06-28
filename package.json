@@ -1,0 +1,26 @@
+{
+  "name": "vaultotp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "tauri": "tauri",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2",
+    "svelte": "^4"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^3",
+    "@tauri-apps/cli": "^2",
+    "@tsconfig/svelte": "^5",
+    "svelte-check": "^3",
+    "typescript": "^5",
+    "vite": "^5",
+    "vitest": "^2"
+  }
+}
