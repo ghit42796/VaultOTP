@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VaultOTP — Main screen mockup</title>
+<style>
+  /* ===== Design tokens (the proposed spec) ===== */
+  .theme-dark {
+    --bg:#0f1419; --surface:#1a212b; --surface-2:#232c38;
+    --text:#e6edf3; --text-muted:#8b98a5;
+    --accent:#4c9aff; --accent-weak:rgba(76,154,255,.14);
+    --danger:#ff6b6b; --success:#3fb950; --border:#2a3441;
+    --ring-track:#2a3441;
+  }
+  .theme-light {
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f5;
+    --text:#1a212b; --text-muted:#5b6772;
+    --accent:#2563eb; --accent-weak:rgba(37,99,235,.10);
+    --danger:#d23b3b; --success:#1a7f37; --border:#e4e9ef;
+    --ring-track:#e4e9ef;
+  }
+  :root{ --radius:14px; --radius-sm:10px; --font-sans:'Segoe UI',system-ui,sans-serif;
+         --font-mono:'SF Mono','Cascadia Code',Consolas,monospace; }
+
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0a0c10; color:#cbd5e1; font-family:var(--font-sans);
+         padding:28px; }
+  .page-title { text-align:center; font-size:20px; font-weight:700; color:#e6edf3; margin:0 0 4px; }
+  .page-sub { text-align:center; color:#8b98a5; font-size:13px; margin:0 0 24px; }
+  .frames { display:flex; gap:32px; justify-content:center; flex-wrap:wrap; }
+  .frame-wrap { text-align:center; }
+  .frame-label { font-size:12px; letter-spacing:.08em; text-transform:uppercase;
+                 color:#8b98a5; margin-bottom:10px; font-weight:600; }
+
+  /* ===== App window frame (420x ~ app size) ===== */
+  .app { width:420px; height:600px; background:var(--bg); color:var(--text);
+         border-radius:18px; overflow:hidden; box-shadow:0 20px 50px rgba(0,0,0,.5);
+         display:flex; flex-direction:column; text-align:left;
+         border:1px solid rgba(255,255,255,.06); }
+
+  header { display:flex; align-items:center; justify-content:space-between;
+           padding:16px 18px; border-bottom:1px solid var(--border); }
+  .brand { display:flex; align-items:center; gap:8px; font-weight:700; font-size:16px; }
+  .brand .logo { font-size:18px; }
+  .tools { display:flex; gap:6px; }
+  .tool { width:34px; height:34px; border-radius:9px; border:none; cursor:pointer;
+          background:var(--surface-2); color:var(--text); font-size:16px;
+          display:flex; align-items:center; justify-content:center; }
+  .tool:hover { background:var(--accent-weak); color:var(--accent); }
+
+  .list { padding:10px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; flex:1; }
+
+  /* ===== Account card ===== */
+  .card { display:flex; align-items:center; gap:12px; padding:12px 14px;
+          background:var(--surface); border:1px solid var(--border);
+          border-radius:var(--radius); position:relative; }
+  .card:hover { border-color:var(--accent); }
+  .badge { width:40px; height:40px; border-radius:11px; flex:0 0 auto;
+           display:flex; align-items:center; justify-content:center;
+           font-weight:700; font-size:17px; color:#fff; }
+  .info { flex:1; min-width:0; }
+  .issuer { font-weight:600; font-size:14px; }
+  .label { font-size:12px; color:var(--text-muted); white-space:nowrap;
+           overflow:hidden; text-overflow:ellipsis; }
+  .code { font-family:var(--font-mono); font-size:24px; font-weight:600;
+          letter-spacing:3px; color:var(--accent); margin-top:3px; }
+
+  /* countdown ring */
+  .ring-wrap { position:relative; width:40px; height:40px; flex:0 0 auto; }
+  .ring-wrap svg { transform:rotate(-90deg); }
+  .ring-bg { fill:none; stroke:var(--ring-track); stroke-width:3.5; }
+  .ring-fg { fill:none; stroke:var(--accent); stroke-width:3.5; stroke-linecap:round; }
+  .ring-fg.warn { stroke:var(--danger); }
+  .ring-num { position:absolute; inset:0; display:flex; align-items:center;
+              justify-content:center; font-size:12px; font-weight:600; color:var(--text-muted); }
+  .ring-num.warn { color:var(--danger); }
+
+  .row-actions { display:flex; flex-direction:column; gap:6px; opacity:.0; transition:opacity .12s; }
+  .card:hover .row-actions { opacity:.8; }
+  .mini { background:none; border:none; cursor:pointer; font-size:14px; color:var(--text-muted); }
+
+  .toast { position:absolute; right:14px; top:8px; font-size:11px; color:var(--success);
+           background:var(--accent-weak); padding:2px 8px; border-radius:20px; }
+
+  .hint { text-align:center; color:#8b98a5; font-size:12px; margin-top:22px; }
+  code.k { background:#1a212b; padding:2px 6px; border-radius:5px; color:#cbd5e1; }
+</style>
+</head>
+<body>
+  <h1 class="page-title">VaultOTP — proposed Main screen</h1>
+  <p class="page-sub">First-letter badge + circular countdown ring · dark (default, follows OS) and light · tokenized colors</p>
+
+  <div class="frames">
+    <!-- ============ DARK ============ -->
+    <div class="frame-wrap">
+      <div class="frame-label">Dark (default)</div>
+      <div class="app theme-dark">
+        <header>
+          <div class="brand"><span class="logo">🔐</span> VaultOTP</div>
+          <div class="tools"><button class="tool">＋</button><button class="tool">🔒</button><button class="tool">⚙</button></div>
+        </header>
+        <div class="list">
+          <!-- GitHub : 23s -->
+          <div class="card">
+            <div class="badge" style="background:#2b3137">G</div>
+            <div class="info">
+              <div class="issuer">GitHub</div>
+              <div class="label">alice@example.com</div>
+              <div class="code">482 913</div>
+            </div>
+            <div class="ring-wrap">
+              <svg width="40" height="40" viewBox="0 0 40 40">
+                <circle class="ring-bg" cx="20" cy="20" r="17"></circle>
+                <circle class="ring-fg" cx="20" cy="20" r="17"
+                  stroke-dasharray="106.8" stroke-dashoffset="24.6"></circle>
+              </svg>
+              <div class="ring-num">23</div>
+            </div>
+          </div>
+          <!-- Google : 12s, showing Copied toast -->
+          <div class="card">
+            <div class="toast">Copied ✓</div>
+            <div class="badge" style="background:#ea4335">G</div>
+            <div class="info">
+              <div class="issuer">Google</div>
+              <div class="label">you@gmail.com</div>
+              <div class="code">730 118</div>
+            </div>
+            <div class="ring-wrap">
+              <svg width="40" height="40" viewBox="0 0 40 40">
+                <circle class="ring-bg" cx="20" cy="20" r="17"></circle>
+                <circle class="ring-fg" cx="20" cy="20" r="17"
+                  stroke-dasharray="106.8" stroke-dashoffset="64.1"></circle>
+              </svg>
+              <div class="ring-num">12</div>
+            </div>
+          </div>
+          <!-- AWS : 4s warn -->
+          <div class="card">
+            <div class="badge" style="background:#ff9900">A</div>
+            <div class="info">
+              <div class="issuer">AWS</div>
+              <div class="label">root · 1234-5678-9012</div>
+              <div class="code">015 224</div>
+            </div>
+            <div class="ring-wrap">
+              <svg width="40" height="40" viewBox="0 0 40 40">
+                <circle class="ring-bg" cx="20" cy="20" r="17"></circle>
+                <circle class="ring-fg warn" cx="20" cy="20" r="17"
+                  stroke-dasharray="106.8" stroke-dashoffset="92.6"></circle>
+              </svg>
+              <div class="ring-num warn">4</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ LIGHT ============ -->
+    <div class="frame-wrap">
+      <div class="frame-label">Light</div>
+      <div class="app theme-light">
+        <header>
+          <div class="brand"><span class="logo">🔐</span> VaultOTP</div>
+          <div class="tools"><button class="tool">＋</button><button class="tool">🔒</button><button class="tool">⚙</button></div>
+        </header>
+        <div class="list">
+          <div class="card">
+            <div class="badge" style="background:#2b3137">G</div>
+            <div class="info">
+              <div class="issuer">GitHub</div>
+              <div class="label">alice@example.com</div>
+              <div class="code">482 913</div>
+            </div>
+            <div class="ring-wrap">
+              <svg width="40" height="40" viewBox="0 0 40 40">
+                <circle class="ring-bg" cx="20" cy="20" r="17"></circle>
+                <circle class="ring-fg" cx="20" cy="20" r="17"
+                  stroke-dasharray="106.8" stroke-dashoffset="24.6"></circle>
+              </svg>
+              <div class="ring-num">23</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="badge" style="background:#ea4335">G</div>
+            <div class="info">
+              <div class="issuer">Google</div>
+              <div class="label">you@gmail.com</div>
+              <div class="code">730 118</div>
+            </div>
+            <div class="ring-wrap">
+              <svg width="40" height="40" viewBox="0 0 40 40">
+                <circle class="ring-bg" cx="20" cy="20" r="17"></circle>
+                <circle class="ring-fg" cx="20" cy="20" r="17"
+                  stroke-dasharray="106.8" stroke-dashoffset="64.1"></circle>
+              </svg>
+              <div class="ring-num">12</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="badge" style="background:#ff9900">A</div>
+            <div class="info">
+              <div class="issuer">AWS</div>
+              <div class="label">root · 1234-5678-9012</div>
+              <div class="code">015 224</div>
+            </div>
+            <div class="ring-wrap">
+              <svg width="40" height="40" viewBox="0 0 40 40">
+                <circle class="ring-bg" cx="20" cy="20" r="17"></circle>
+                <circle class="ring-fg warn" cx="20" cy="20" r="17"
+                  stroke-dasharray="106.8" stroke-dashoffset="92.6"></circle>
+              </svg>
+              <div class="ring-num warn">4</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="hint">Badge = issuer initial in a brand-ish color · ring drains over the 30s period, turns <span style="color:#ff6b6b">red ≤5s</span> · tap a card to copy (shows “Copied ✓”) · hover reveals delete. &nbsp; Tell me in the terminal what to tweak (colors, badge, ring size, density…).</p>
+</body>
+</html>

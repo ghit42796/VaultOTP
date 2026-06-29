@@ -1,0 +1,55 @@
+:root {
+  --radius: 14px; --radius-sm: 10px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", Consolas, monospace;
+
+  /* LIGHT (also the system-light default) */
+  --bg: #f4f6f9; --surface: #ffffff; --surface-2: #eef1f5;
+  --text: #1a212b; --text-muted: #5b6772;
+  --accent: #2563eb; --accent-weak: rgba(37,99,235,.10); --accent-contrast: #ffffff;
+  --danger: #d23b3b; --success: #1a7f37; --border: #e4e9ef;
+  --ring-track: #e4e9ef; --ring-fill: var(--accent);
+}
+
+/* dark palette as reusable declarations */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #0f1419; --surface: #1a212b; --surface-2: #232c38;
+    --text: #e6edf3; --text-muted: #8b98a5;
+    --accent: #4c9aff; --accent-weak: rgba(76,154,255,.14); --accent-contrast: #ffffff;
+    --danger: #ff6b6b; --success: #3fb950; --border: #2a3441;
+    --ring-track: #2a3441; --ring-fill: var(--accent);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1419; --surface: #1a212b; --surface-2: #232c38;
+  --text: #e6edf3; --text-muted: #8b98a5;
+  --accent: #4c9aff; --accent-weak: rgba(76,154,255,.14); --accent-contrast: #ffffff;
+  --danger: #ff6b6b; --success: #3fb950; --border: #2a3441;
+  --ring-track: #2a3441; --ring-fill: var(--accent);
+}
+/* :root[data-theme="light"] uses the :root light defaults — no override needed */
+
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: var(--font-sans); font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+button { font-family: inherit; }
+::selection { background: var(--accent-weak); }
+
+/* shared form controls for modal panels */
+.vo-field { width: 100%; padding: 11px 13px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px; }
+.vo-field::placeholder { color: var(--text-muted); }
+.vo-field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak); }
+.vo-primary { padding: 11px; border: none; border-radius: var(--radius-sm);
+  background: var(--accent); color: var(--accent-contrast); font-weight: 600; font-size: 14px; cursor: pointer; }
+.vo-primary:disabled { opacity: .6; cursor: default; }
+.vo-ghost { padding: 11px; border: 1px solid var(--border); background: none; color: var(--text);
+  border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; }
+.vo-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.vo-err { color: var(--danger); font-size: 13px; margin: 0; }

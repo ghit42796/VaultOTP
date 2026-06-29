@@ -1,0 +1,99 @@
+name: Release
+
+# Publish downloadable installers to a GitHub Release whenever a version tag is pushed.
+# Cut a release by bumping the version in the manifests, then:
+#   git tag v0.1.0 && git push origin v0.1.0
+# See RELEASING.md for the full checklist.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# tauri-action needs write access to create the Release and upload assets.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target universal-apple-darwin
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - platform: ubuntu-latest
+            args: ""
+            rust-targets: x86_64-unknown-linux-gnu
+          - platform: windows-latest
+            args: ""
+            rust-targets: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            pkg-config \
+            libxcb1-dev \
+            libxcb-randr0-dev \
+            libxcb-shm0-dev \
+            libdbus-1-dev
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build and attach installers to a draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # All matrix jobs share one Release keyed by the pushed tag; each job
+          # attaches its own platform's bundles to it.
+          tagName: ${{ github.ref_name }}
+          releaseName: "VaultOTP ${{ github.ref_name }}"
+          releaseBody: |
+            VaultOTP ${{ github.ref_name }} — offline TOTP authenticator with an encrypted local vault.
+
+            Download the installer for your platform from the assets below:
+
+            | Platform | File |
+            |----------|------|
+            | Windows  | `.msi` or `.exe` |
+            | macOS    | `.dmg` (universal — Intel + Apple Silicon) |
+            | Linux    | `.AppImage` or `.deb` |
+
+            > ⚠️ These builds are **unsigned** — on first launch Windows SmartScreen / macOS
+            > Gatekeeper may warn you. See the README "Download / Install" section for how to proceed.
+          # Leave as a draft so a human reviews the assets and notes before it goes public.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
