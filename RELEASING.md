@@ -1,9 +1,19 @@
 # Releasing VaultOTP
 
-VaultOTP ships downloadable installers via **GitHub Releases**. Pushing a `v*` tag triggers
-[`.github/workflows/release.yml`](.github/workflows/release.yml), which builds Windows,
-macOS, and Linux bundles and attaches them to a **draft** Release for you to review and
-publish.
+VaultOTP ships downloadable installers **and portable builds** via **GitHub Releases**.
+Pushing a `v*` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml),
+which builds Windows, macOS, and Linux bundles and attaches them to a Release.
+
+The workflow runs in three stages: it creates **one** draft Release, every platform job
+uploads its assets to that same draft, and a final job **publishes it automatically** once
+all platforms succeed. If any platform fails the Release stays a draft so you can fix and
+re-run without shipping a half-finished release.
+
+> **The `Source code (zip)` / `(tar.gz)` on a tag are NOT the app.** GitHub auto-attaches a
+> source snapshot to *every* tag; they are the repo's source, not a runnable build. The
+> installers/portable builds only appear once the Release is **published** (the page then
+> says "released this", not "tagged this"). Until then they live in the **draft** under
+> **Releases**, visible only to maintainers.
 
 ## One-time setup
 
@@ -51,14 +61,18 @@ The version must be kept in sync across three files:
    git push origin v0.2.0
    ```
 5. **Watch the build** under the repo's **Actions** tab. The three platform jobs build in
-   parallel (~10–20 min including the Rust compile).
-6. **Publish the draft.** When the workflow finishes, open **Releases** → the new
-   `VaultOTP v0.2.0` **draft** → confirm all expected assets are attached:
-   - Windows: `.msi` and `.exe`
-   - macOS: `.dmg` (universal)
-   - Linux: `.AppImage` and `.deb`
+   parallel (~10–20 min including the Rust compile), then `publish-release` flips the
+   Release public.
+6. **Verify the published Release.** Open **Releases** → `VaultOTP v0.2.0` and confirm the
+   assets are attached:
+   | Platform | Installer | Portable |
+   |----------|-----------|----------|
+   | Windows  | `.msi`, `.exe` (NSIS) | `VaultOTP-portable-windows-x64.exe` |
+   | macOS    | `.dmg` (universal) | `VaultOTP-portable-macos-universal.zip` |
+   | Linux    | `.deb` | `.AppImage` |
 
-   Edit the release notes if you like, then click **Publish release**.
+   If a platform failed, the Release stays a **draft** — fix the job, re-run, and it will be
+   published when all platforms are green. Edit the notes anytime.
 
 ## If something goes wrong
 
@@ -82,5 +96,3 @@ The version must be kept in sync across three files:
     `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` secrets consumed by `tauri-action`).
 - **Auto-updater.** `tauri-action` can also produce updater artifacts + a `latest.json`
   if the Tauri updater plugin is enabled. Not configured today.
-- **LICENSE.** There is no license file yet; publishing binaries publicly without one is
-  legally ambiguous. Add a `LICENSE` before a public release.

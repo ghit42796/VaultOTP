@@ -1,21 +1,68 @@
 name: Release
 
-# Publish downloadable installers to a GitHub Release whenever a version tag is pushed.
-# Cut a release by bumping the version in the manifests, then:
+# Publish downloadable installers AND portable builds to a GitHub Release whenever a
+# version tag is pushed. Cut a release by bumping the version in the manifests, then:
 #   git tag v0.1.0 && git push origin v0.1.0
 # See RELEASING.md for the full checklist.
+#
+# Flow (3 jobs):
+#   create-release  -> creates ONE draft Release, outputs its id (avoids the multi-draft
+#                      race you get when each matrix job creates its own draft)
+#   build-tauri     -> each platform builds, then uploads its installers + portable build
+#                      to that SAME release via releaseId
+#   publish-release -> flips the release public only after ALL platforms succeed
 
 on:
   push:
     tags:
       - "v*"
 
-# tauri-action needs write access to create the Release and upload assets.
+# Needed to create the Release and upload assets with the built-in GITHUB_TOKEN.
 permissions:
   contents: write
 
 jobs:
-  release:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create.outputs.result }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create draft release
+        id: create
+        uses: actions/github-script@v7
+        with:
+          # Returns the numeric release id, consumed by the build/publish jobs.
+          result-encoding: string
+          script: |
+            const tag = context.ref.replace('refs/tags/', '');
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `VaultOTP ${tag}`,
+              draft: true,
+              prerelease: false,
+              body: [
+                `VaultOTP ${tag} — offline TOTP authenticator with an encrypted local vault.`,
+                '',
+                'Pick the file for your platform:',
+                '',
+                '| Platform | Installer | Portable (no install) |',
+                '|----------|-----------|------------------------|',
+                '| Windows  | `.msi` / `.exe` (NSIS) | `VaultOTP-portable-windows-x64.exe` |',
+                '| macOS    | `.dmg` (universal) | `VaultOTP-portable-macos-universal.zip` (the `.app`) |',
+                '| Linux    | `.deb` | `.AppImage` (portable) |',
+                '',
+                '> ⚠️ These builds are **unsigned** — on first launch Windows SmartScreen / macOS',
+                '> Gatekeeper may warn you. See the README "Download / Install" section for how to proceed.',
+              ].join('\n'),
+            });
+            return data.id;
+
+  build-tauri:
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -71,29 +118,64 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Build and attach installers to a draft release
+      # Builds the app and uploads each platform's INSTALLERS (.msi/.exe, .dmg, .deb,
+      # .AppImage) to the shared release identified by releaseId.
+      - name: Build and attach installers
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # All matrix jobs share one Release keyed by the pushed tag; each job
-          # attaches its own platform's bundles to it.
-          tagName: ${{ github.ref_name }}
-          releaseName: "VaultOTP ${{ github.ref_name }}"
-          releaseBody: |
-            VaultOTP ${{ github.ref_name }} — offline TOTP authenticator with an encrypted local vault.
-
-            Download the installer for your platform from the assets below:
-
-            | Platform | File |
-            |----------|------|
-            | Windows  | `.msi` or `.exe` |
-            | macOS    | `.dmg` (universal — Intel + Apple Silicon) |
-            | Linux    | `.AppImage` or `.deb` |
-
-            > ⚠️ These builds are **unsigned** — on first launch Windows SmartScreen / macOS
-            > Gatekeeper may warn you. See the README "Download / Install" section for how to proceed.
-          # Leave as a draft so a human reviews the assets and notes before it goes public.
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
+
+      # --- Portable builds (the raw binary, no installer) ---
+
+      - name: Upload Windows portable exe
+        if: matrix.platform == 'windows-latest'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.create-release.outputs.release_id }},
+              name: 'VaultOTP-portable-windows-x64.exe',
+              data: fs.readFileSync('src-tauri/target/release/vaultotp.exe'),
+            });
+
+      - name: Package macOS portable app
+        if: matrix.platform == 'macos-latest'
+        run: |
+          APP=$(ls -d src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app | head -1)
+          ditto -c -k --sequesterRsrc --keepParent "$APP" VaultOTP-portable-macos-universal.zip
+
+      - name: Upload macOS portable app
+        if: matrix.platform == 'macos-latest'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.create-release.outputs.release_id }},
+              name: 'VaultOTP-portable-macos-universal.zip',
+              data: fs.readFileSync('VaultOTP-portable-macos-universal.zip'),
+            });
+      # Linux: the .AppImage produced by tauri-action is already a portable single-file build.
+
+  publish-release:
+    needs: [create-release, build-tauri]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.create-release.outputs.release_id }},
+              draft: false,
+            });
