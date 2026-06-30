@@ -7,6 +7,7 @@
   export let item: CodeView;
   export let selectMode = false;
   export let selected = false;
+  export let reorderMode = false;
 
   const dispatch = createEventDispatcher();
   const settings = loadSettings();
@@ -17,6 +18,7 @@
   $: warn = item.remaining <= 5;
 
   async function activate() {
+    if (reorderMode) return;
     if (selectMode) { dispatch("toggle", item.id); return; }
     await copy();
   }
@@ -42,8 +44,9 @@
     class="main"
     on:click={activate}
     aria-pressed={selectMode ? selected : undefined}
-    title={selectMode ? "Toggle selection" : "Copy code"}
+    title={reorderMode ? "Drag to reorder" : selectMode ? "Toggle selection" : "Copy code"}
   >
+    {#if reorderMode}<span class="handle" aria-hidden="true">≡</span>{/if}
     {#if selectMode}<span class="check" class:on={selected} aria-hidden="true"></span>{/if}
     <span class="badge" style="background:{badgeColor(item.issuer)}">{initial(item.issuer)}</span>
     <span class="mid">
@@ -60,7 +63,7 @@
     </span>
   </button>
 
-  {#if !selectMode}
+  {#if !selectMode && !reorderMode}
     <button class="del" on:click|stopPropagation={() => dispatch("remove", item.id)} title="Delete" aria-label="Delete">🗑</button>
   {/if}
 
@@ -81,6 +84,8 @@
     padding: 11px 13px 14px; background: none; border: none; cursor: pointer;
     text-align: left; border-radius: var(--radius);
   }
+
+  .handle { flex: 0 0 auto; color: var(--text-muted); font-size: 16px; line-height: 1; cursor: grab; }
 
   .check {
     width: 18px; height: 18px; border-radius: 6px; border: 2px solid var(--border);

@@ -5,7 +5,7 @@
   import AddMenu from "../components/AddMenu.svelte";
   import Settings from "../components/Settings.svelte";
   import type { CodeView } from "../lib/types";
-  import { currentCodes, removeAccount, lock, onTick, exportSecrets, type ExportFormat } from "../lib/ipc";
+  import { currentCodes, removeAccount, lock, onTick, exportSecrets, reorderAccounts, type ExportFormat } from "../lib/ipc";
   import { loadSettings } from "../lib/settings";
   import { open, save } from "@tauri-apps/plugin-dialog";
 
@@ -22,7 +22,11 @@
   let exportStatus = "";
   let exportError = "";
 
-  async function refresh() { codes = await currentCodes(); }
+  let reorderMode = false;
+  let dragIndex: number | null = null;
+  let dragging = false;
+
+  async function refresh() { if (dragging) return; codes = await currentCodes(); }
 
   function resetIdle() {
     clearTimeout(idleTimer);
@@ -56,11 +60,40 @@
 
   function toggleSelectMode() {
     selectMode = !selectMode;
+    if (selectMode) { reorderMode = false; }
     if (!selectMode) {
       selected = new Set();
       exportStatus = "";
       exportError = "";
     }
+  }
+
+  function toggleReorderMode() {
+    reorderMode = !reorderMode;
+    if (reorderMode) { selectMode = false; selected = new Set(); }
+    dragIndex = null;
+    dragging = false;
+  }
+
+  function onDragStart(i: number) { dragIndex = i; dragging = true; }
+
+  function onDragOver(e: DragEvent, i: number) {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === i) return;
+    const arr = [...codes];
+    const [moved] = arr.splice(dragIndex, 1);
+    arr.splice(i, 0, moved);
+    codes = arr;
+    dragIndex = i;
+  }
+
+  async function persistOrder() {
+    if (!dragging) return;
+    dragging = false;
+    dragIndex = null;
+    try { await reorderAccounts(codes.map((c) => c.id)); }
+    catch (_) { /* ignore; refresh restores the persisted order */ }
+    await refresh();
   }
 
   function toggleSelect(id: string) {
@@ -97,14 +130,21 @@
 <header>
   <div class="brand"><span class="logo">🔐</span> VaultOTP</div>
   <div class="tools">
-    {#if !selectMode}
+    {#if !selectMode && !reorderMode}
       <button class="tool" on:click={() => (showAdd = true)} title="Add account" aria-label="Add account">＋</button>
       <button class="tool" on:click={doLock} title="Lock now" aria-label="Lock now">🔒</button>
       <button class="tool" on:click={() => (showSettings = true)} title="Settings" aria-label="Settings">⚙</button>
     {/if}
-    <button class="tool" class:tool-active={selectMode} on:click={toggleSelectMode} title={selectMode ? "Cancel selection" : "Select accounts to export"} aria-label={selectMode ? "Cancel selection" : "Select accounts"}>
-      {selectMode ? "✕" : "☑"}
-    </button>
+    {#if !reorderMode}
+      <button class="tool" class:tool-active={selectMode} on:click={toggleSelectMode} title={selectMode ? "Cancel selection" : "Select accounts to export"} aria-label={selectMode ? "Cancel selection" : "Select accounts"}>
+        {selectMode ? "✕" : "☑"}
+      </button>
+    {/if}
+    {#if !selectMode}
+      <button class="tool" class:tool-active={reorderMode} on:click={toggleReorderMode} title={reorderMode ? "Done reordering" : "Reorder accounts"} aria-label={reorderMode ? "Done reordering" : "Reorder accounts"}>
+        {reorderMode ? "✓" : "⇅"}
+      </button>
+    {/if}
   </div>
 </header>
 
@@ -125,14 +165,28 @@
 {/if}
 
 <div class="list">
-  {#each codes as item (item.id)}
-    <AccountCard
-      {item}
-      {selectMode}
-      selected={selected.has(item.id)}
-      on:remove={(e) => remove(e.detail)}
-      on:toggle={(e) => toggleSelect(e.detail)}
-    />
+  {#each codes as item, i (item.id)}
+    {#if reorderMode}
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+      <div
+        class="drag-row"
+        draggable="true"
+        on:dragstart={() => onDragStart(i)}
+        on:dragover={(e) => onDragOver(e, i)}
+        on:drop={persistOrder}
+        on:dragend={persistOrder}
+      >
+        <AccountCard {item} reorderMode={true} />
+      </div>
+    {:else}
+      <AccountCard
+        {item}
+        {selectMode}
+        selected={selected.has(item.id)}
+        on:remove={(e) => remove(e.detail)}
+        on:toggle={(e) => toggleSelect(e.detail)}
+      />
+    {/if}
   {/each}
   {#if codes.length === 0}
     <div class="empty">
@@ -171,6 +225,9 @@
   .empty p { margin: 2px 0; }
   .empty-title { font-weight: 600; color: var(--text); margin: 2px 0; }
   .empty-sub { font-size: 12px; }
+
+  .drag-row { cursor: grab; }
+  .drag-row:active { cursor: grabbing; }
 
   /* Export bar */
   .export-bar {

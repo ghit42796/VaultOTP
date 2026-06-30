@@ -389,6 +389,20 @@ pub fn export_secrets(state: tauri::State<AppState>, ids: Vec<String>, path: Str
     export_secrets_inner(&state, ids, path, format)
 }
 
+/// Shared logic for `reorder_accounts`, testable without a Tauri `State` wrapper.
+/// Reorders the in-memory vault to match `ids` (must be a permutation), then persists.
+fn reorder_accounts_inner(state: &AppState, ids: Vec<String>) -> Result<()> {
+    let mut g = state.vault.lock().unwrap();
+    g.reorder(&ids)?;
+    let bytes = g.serialize(random_nonce())?;
+    crate::storage::write_atomic(&state.current_path(), &bytes)
+}
+
+#[tauri::command]
+pub fn reorder_accounts(state: tauri::State<AppState>, ids: Vec<String>) -> Result<()> {
+    reorder_accounts_inner(&state, ids)
+}
+
 /// Shared logic for `set_current_vault`, testable without a Tauri `State` wrapper.
 fn set_current_vault_inner(state: &AppState, path: String) -> Result<()> {
     *state.current.lock().unwrap() = std::path::PathBuf::from(&path);
@@ -560,5 +574,35 @@ mod tests {
     fn export_secrets_errors_when_locked() {
         let st = AppState { vault: Mutex::new(Vault::new()), current: Mutex::new(std::path::PathBuf::from("/x")), config_dir: std::path::PathBuf::from("/c") };
         assert!(export_secrets_inner(&st, vec!["id1".into()], "/tmp/none.txt".into(), "otpauth_text".into()).is_err());
+    }
+
+    #[test]
+    fn reorder_accounts_inner_persists_new_order() {
+        let dir = std::env::temp_dir().join(format!("votp_reorder_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut v = Vault::create_unlocked(Credential::Password(b"pw"), [9u8; 16], KdfParams::default()).unwrap();
+        for id in ["id1", "id2", "id3"] {
+            let mut a = Account::new("Iss".into(), id.into(), "JBSWY3DPEHPK3PXP".into());
+            a.id = id.into();
+            v.add(a).unwrap();
+        }
+        let path = dir.join("v.bin");
+        let st = AppState { vault: Mutex::new(v), current: Mutex::new(path.clone()), config_dir: dir.clone() };
+        reorder_accounts_inner(&st, vec!["id3".into(), "id1".into(), "id2".into()]).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        let v2 = Vault::unlock_from_bytes(&bytes, Credential::Password(b"pw")).unwrap();
+        let ids: Vec<String> = v2.accounts().unwrap().iter().map(|a| a.id.clone()).collect();
+        assert_eq!(ids, vec!["id3".to_string(), "id1".to_string(), "id2".to_string()]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn reorder_accounts_inner_errors_when_locked() {
+        let st = AppState {
+            vault: Mutex::new(Vault::new()),
+            current: Mutex::new(std::path::PathBuf::from("/x")),
+            config_dir: std::path::PathBuf::from("/c"),
+        };
+        assert!(reorder_accounts_inner(&st, vec!["id1".into()]).is_err());
     }
 }

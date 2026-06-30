@@ -4,7 +4,7 @@ const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...a: unknown[]) => invokeMock(...a) }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
-import { unlock, currentCodes, createVault, setCurrentVault, listRecentVaults, saveVaultAs, exportSecrets } from "./ipc";
+import { unlock, currentCodes, createVault, setCurrentVault, listRecentVaults, saveVaultAs, exportSecrets, reorderAccounts } from "./ipc";
 
 describe("ipc", () => {
   beforeEach(() => invokeMock.mockReset());
@@ -55,5 +55,11 @@ describe("ipc", () => {
     const n = await exportSecrets(["id1", "id2"], "/out.txt", "otpauth_text");
     expect(invokeMock).toHaveBeenCalledWith("export_secrets", { ids: ["id1", "id2"], path: "/out.txt", format: "otpauth_text" });
     expect(n).toBe(2);
+  });
+
+  it("reorderAccounts forwards ids", async () => {
+    invokeMock.mockResolvedValue(undefined);
+    await reorderAccounts(["a", "b", "c"]);
+    expect(invokeMock).toHaveBeenCalledWith("reorder_accounts", { ids: ["a", "b", "c"] });
   });
 });

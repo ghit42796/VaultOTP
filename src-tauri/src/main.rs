@@ -90,6 +90,7 @@ fn main() {
             commands::current_vault_path,
             commands::save_vault_as,
             commands::export_secrets,
+            commands::reorder_accounts,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

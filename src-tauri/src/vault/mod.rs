@@ -106,6 +106,24 @@ impl Vault {
         Ok(())
     }
 
+    /// Pure: rearrange `accounts` to match `ids`, which must be a permutation of the
+    /// current account ids. Locked -> Err(Crypto). Non-permutation -> Err(Other), unchanged.
+    pub fn reorder(&mut self, ids: &[String]) -> Result<()> {
+        let u = self.state.as_mut().ok_or(AppError::Crypto)?;
+        let is_permutation = {
+            let current: std::collections::HashSet<&str> = u.accounts.iter().map(|a| a.id.as_str()).collect();
+            let requested: std::collections::HashSet<&str> = ids.iter().map(|s| s.as_str()).collect();
+            ids.len() == u.accounts.len() && requested.len() == ids.len() && requested == current
+        };
+        if !is_permutation {
+            return Err(AppError::Other("invalid account order".into()));
+        }
+        let mut map: std::collections::HashMap<String, Account> =
+            u.accounts.drain(..).map(|a| (a.id.clone(), a)).collect();
+        u.accounts = ids.iter().map(|id| map.remove(id).expect("validated permutation")).collect();
+        Ok(())
+    }
+
     /// Pure: encrypt current accounts with the stored key + injected nonce. No I/O.
     pub fn serialize(&self, nonce: [u8; 12]) -> Result<Vec<u8>> {
         let u = self.state.as_ref().ok_or(AppError::Crypto)?;
@@ -262,5 +280,31 @@ mod tests {
         // Both works and data survived.
         let v2 = Vault::unlock_from_bytes(&bytes, Credential::Both { password: b"pw", keyfile: b"kf" }).unwrap();
         assert_eq!(v2.accounts().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn reorder_to_permutation() {
+        let mut v = Vault::create_unlocked(Credential::Password(b"pw"), [9u8; 16], fast_kdf()).unwrap();
+        v.add(acc("a")).unwrap(); v.add(acc("b")).unwrap(); v.add(acc("c")).unwrap();
+        v.reorder(&["c".to_string(), "a".to_string(), "b".to_string()]).unwrap();
+        let ids: Vec<&str> = v.accounts().unwrap().iter().map(|a| a.id.as_str()).collect();
+        assert_eq!(ids, vec!["c", "a", "b"]);
+    }
+
+    #[test]
+    fn reorder_rejects_non_permutation_and_leaves_unchanged() {
+        let mut v = Vault::create_unlocked(Credential::Password(b"pw"), [9u8; 16], fast_kdf()).unwrap();
+        v.add(acc("a")).unwrap(); v.add(acc("b")).unwrap();
+        assert!(matches!(v.reorder(&["a".to_string()]), Err(AppError::Other(_))));                          // missing
+        assert!(matches!(v.reorder(&["a".to_string(), "b".to_string(), "x".to_string()]), Err(AppError::Other(_)))); // extra
+        assert!(matches!(v.reorder(&["a".to_string(), "a".to_string()]), Err(AppError::Other(_))));         // duplicate
+        let ids: Vec<&str> = v.accounts().unwrap().iter().map(|a| a.id.as_str()).collect();
+        assert_eq!(ids, vec!["a", "b"]); // unchanged
+    }
+
+    #[test]
+    fn reorder_locked_errors() {
+        let mut v = Vault::new();
+        assert!(matches!(v.reorder(&["a".to_string()]), Err(AppError::Crypto)));
     }
 }

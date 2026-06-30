@@ -32,6 +32,7 @@ export const previewMigration = (uri: string) => invoke<AccountView[]>("preview_
 export const importMigration = (uri: string, selectedIndices: number[]) =>
   invoke<number>("import_migration", { uri, selectedIndices });
 export const removeAccount = (id: string) => invoke<void>("remove_account", { id });
+export const reorderAccounts = (ids: string[]) => invoke<void>("reorder_accounts", { ids });
 export const exportBackup = (path: string, password: string) => invoke<void>("export_backup", { path, password });
 export const importBackup = (path: string, password: string) => invoke<number>("import_backup", { path, password });
 
