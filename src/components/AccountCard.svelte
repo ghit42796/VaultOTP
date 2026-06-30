@@ -2,23 +2,29 @@
   import type { CodeView } from "../lib/types";
   import { createEventDispatcher } from "svelte";
   import { loadSettings } from "../lib/settings";
-  import { initial, badgeColor, groupCode, ringCircumference, ringDashoffset } from "../lib/display";
+  import { initial, badgeColor, groupCode, barFraction } from "../lib/display";
 
   export let item: CodeView;
+  export let selectMode = false;
+  export let selected = false;
+
   const dispatch = createEventDispatcher();
   const settings = loadSettings();
   let copied = false;
 
   const PERIOD = 30;
-  const R = 17;
-  const C = ringCircumference(R);
-  $: offset = ringDashoffset(item.remaining, PERIOD, R);
+  $: fraction = barFraction(item.remaining, PERIOD);
   $: warn = item.remaining <= 5;
+
+  async function activate() {
+    if (selectMode) { dispatch("toggle", item.id); return; }
+    await copy();
+  }
 
   async function copy() {
     await navigator.clipboard.writeText(item.code);
     copied = true;
-    setTimeout(() => (copied = false), 1500);
+    setTimeout(() => (copied = false), 1200);
     const ms = settings.clipboardClearMs;
     if (ms > 0) {
       setTimeout(async () => {
@@ -31,63 +37,86 @@
   }
 </script>
 
-<div class="card">
-  <div class="badge" style="background:{badgeColor(item.issuer)}">{initial(item.issuer)}</div>
-
-  <button class="main" on:click={copy} title="Copy code">
-    <span class="issuer">{item.issuer || "—"}</span>
-    <span class="label">{item.label}</span>
-    <span class="code">{groupCode(item.code)}</span>
+<div class="card" class:selected class:copied>
+  <button
+    class="main"
+    on:click={activate}
+    aria-pressed={selectMode ? selected : undefined}
+    title={selectMode ? "Toggle selection" : "Copy code"}
+  >
+    {#if selectMode}<span class="check" class:on={selected} aria-hidden="true"></span>{/if}
+    <span class="badge" style="background:{badgeColor(item.issuer)}">{initial(item.issuer)}</span>
+    <span class="mid">
+      <span class="issuer">{item.issuer || "—"}</span>
+      <span class="label">{item.label}</span>
+    </span>
+    <span class="right">
+      <span class="code" class:warn>{groupCode(item.code)}</span>
+      {#if copied}
+        <span class="secs ok">Copied ✓</span>
+      {:else}
+        <span class="secs" class:warn>{item.remaining}s</span>
+      {/if}
+    </span>
   </button>
 
-  {#if copied}<span class="toast">Copied ✓</span>{/if}
+  {#if !selectMode}
+    <button class="del" on:click|stopPropagation={() => dispatch("remove", item.id)} title="Delete" aria-label="Delete">🗑</button>
+  {/if}
 
-  <div class="ring" title="{item.remaining}s remaining">
-    <svg width="40" height="40" viewBox="0 0 40 40">
-      <circle class="track" cx="20" cy="20" r={R} stroke-width="3.5" fill="none" />
-      <circle class="fill" class:warn cx="20" cy="20" r={R} stroke-width="3.5"
-        fill="none" stroke-linecap="round"
-        stroke-dasharray={C} stroke-dashoffset={offset} transform="rotate(-90 20 20)" />
-    </svg>
-    <span class="num" class:warn>{item.remaining}</span>
-  </div>
-
-  <button class="del" on:click={() => dispatch("remove", item.id)} title="Delete" aria-label="Delete">🗑</button>
+  <span class="bar"><i class:warn style="width:{fraction * 100}%"></i></span>
 </div>
 
 <style>
   .card {
-    display: flex; align-items: center; gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); position: relative;
+    position: relative; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    transition: border-color .12s, background .25s, box-shadow .12s;
   }
-  .card:hover { border-color: var(--accent); }
-  .badge {
-    width: 40px; height: 40px; border-radius: 11px; flex: 0 0 auto;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 17px; color: #fff;
-  }
+  .card:hover { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak); }
+  .card.selected, .card.copied { border-color: var(--accent); background: var(--accent-weak); }
+
   .main {
-    flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
-    background: none; border: none; padding: 0; cursor: pointer; text-align: left;
+    width: 100%; display: flex; align-items: center; gap: var(--space-3);
+    padding: 11px 13px 14px; background: none; border: none; cursor: pointer;
+    text-align: left; border-radius: var(--radius);
   }
+
+  .check {
+    width: 18px; height: 18px; border-radius: 6px; border: 2px solid var(--border);
+    flex: 0 0 auto; position: relative;
+  }
+  .check.on { background: var(--accent); border-color: var(--accent); }
+  .check.on::after {
+    content: "✓"; color: #fff; font-size: 11px; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .badge {
+    width: 34px; height: 34px; border-radius: 10px; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 15px; color: #fff;
+  }
+  .mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
   .issuer { font-weight: 600; color: var(--text); }
-  .label { font-size: 12px; color: var(--text-muted);
+  .label { font-size: 11px; color: var(--text-muted);
            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .right { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; flex: 0 0 auto; }
   .code { font-family: var(--font-mono); font-size: 22px; font-weight: 600;
-          letter-spacing: 3px; color: var(--accent); margin-top: 2px; }
-  .ring { position: relative; width: 40px; height: 40px; flex: 0 0 auto; }
-  .track { stroke: var(--ring-track); }
-  .fill { stroke: var(--ring-fill); transition: stroke-dashoffset .3s linear; }
-  .fill.warn { stroke: var(--danger); }
-  .num { position: absolute; inset: 0; display: flex; align-items: center;
-         justify-content: center; font-size: 12px; font-weight: 600; color: var(--text-muted); }
-  .num.warn { color: var(--danger); }
-  .toast { position: absolute; right: 56px; top: 8px; font-size: 11px;
-           color: var(--success); background: var(--accent-weak);
-           padding: 2px 8px; border-radius: 20px; }
-  .del { background: none; border: none; cursor: pointer; font-size: 14px;
-         opacity: 0; transition: opacity .12s; color: var(--text-muted); }
-  .card:hover .del { opacity: .8; }
+          letter-spacing: 4px; color: var(--accent); }
+  .code.warn { color: var(--danger); }
+  .secs { font-size: 10px; color: var(--text-muted); }
+  .secs.warn { color: var(--danger); }
+  .secs.ok { color: var(--success); font-weight: 600; }
+
+  .bar { position: absolute; left: 13px; right: 13px; bottom: 6px; height: 3px;
+         border-radius: 3px; background: var(--ring-track); overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--accent); transition: width .3s linear; }
+  .bar > i.warn { background: var(--danger); }
+
+  .del { position: absolute; top: 6px; right: 8px; background: none; border: none;
+         cursor: pointer; font-size: 13px; color: var(--text-muted);
+         opacity: 0; transition: opacity .12s; }
+  .card:hover .del { opacity: .7; }
 </style>

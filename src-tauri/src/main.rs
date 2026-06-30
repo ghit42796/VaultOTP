@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod backup;
+mod config;
 mod commands;
 mod error;
 mod migration;
@@ -32,22 +33,22 @@ pub fn otpauth_decode(s: &str) -> String {
     out
 }
 
-fn vault_path(app: &tauri::App) -> std::path::PathBuf {
-    use tauri::Manager;
-    let dir = app.path().app_config_dir().expect("config dir");
-    std::fs::create_dir_all(&dir).ok();
-    dir.join("vault.bin")
-}
-
 fn main() {
-    use tauri::Manager;
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let path = vault_path(app);
+            use tauri::Manager;
+            let config_dir = app.path().app_config_dir().expect("config dir");
+            std::fs::create_dir_all(&config_dir).ok();
+            let cfg = config::load(&config_dir);
+            let current = cfg
+                .last
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| config_dir.join("vault.bin"));
             app.manage(commands::AppState {
                 vault: std::sync::Mutex::new(vault::Vault::new()),
-                path,
+                current: std::sync::Mutex::new(current),
+                config_dir,
             });
 
             // Background tick: emit "tick" every second so the frontend can
@@ -65,6 +66,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::vault_exists,
+            commands::vault_mode,
             commands::create_vault,
             commands::unlock,
             commands::lock,
@@ -79,6 +81,15 @@ fn main() {
             commands::remove_account,
             commands::export_backup,
             commands::import_backup,
+            commands::add_keyfile,
+            commands::remove_keyfile,
+            commands::change_password,
+            commands::generate_keyfile,
+            commands::set_current_vault,
+            commands::list_recent_vaults,
+            commands::current_vault_path,
+            commands::save_vault_as,
+            commands::export_secrets,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

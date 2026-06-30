@@ -295,3 +295,38 @@ Per the per-package deep-dive (OSV / RustSec / GitHub Advisories / targeted web 
 ---
 
 *Full-tree CVE coverage across all 555 crates / 167 packages is provided separately by the controller's `cargo-audit` and `npm-audit` runs; this report covers per-package provenance/malicious-history deep-dives, the applicable-CVE analysis for the deep-dived set, and the sans-IO source audit.*
+
+---
+
+## 7. Addendum — new dependency added in Plan 3 (2026-06-29)
+
+### `qrcode` 0.14.1
+
+| Field | Value |
+|---|---|
+| Crate | qrcode |
+| Version | 0.14.1 (resolved; `version = "0.14"` in `Cargo.toml`) |
+| Source | crates.io (`index.crates.io`) |
+| License | MIT OR Apache-2.0 (from crate's `Cargo.toml` `license` field) |
+| Author | kennytm (kennytm@gmail.com) |
+| Repository | https://github.com/kennytm/qrcode-rust |
+| Maintenance | passively-maintained (badge in crate metadata) |
+| Added for | `qr::encode_png` — encode an otpauth or migration URI as a QR PNG; pure bytes-in/bytes-out (no I/O). |
+| Feature flags | `default-features = false` — disables the `image`, `svg`, and `pic` rendering backends. Only the pure encoder core is compiled. This avoids a potential `image`-version conflict with the already-present `image = "0.25"` direct dep (the crate's own `image` optional dep also targets 0.25, but to keep the dep-graph clean and the compile surface minimal, the feature is left off and PNG rendering is performed via the already-present `image` crate in `qr.rs` directly). |
+| **Transitive deps (default-features=false)** | **None** — `cargo tree -p qrcode` with these features returns only `qrcode v0.14.1` (no children). The image/svg/pic optional deps are the only transitive surface; all are excluded by `default-features=false`. |
+| Official? | Individual-maintained (single author kennytm). ~1.5M downloads. No org steward. |
+| Provenance | Resolves from crates.io; no git source or alternate registry. |
+
+#### RustSec / CVE check (2026-06-29)
+
+- `cargo audit` run against the full `Cargo.lock` (with `qrcode 0.14.1` now present): **0 vulnerabilities, 19 informational warnings** — identical to the baseline audit (§3 above). No advisory of any kind for `qrcode` was found.
+- Manual cross-check: https://rustsec.org/packages/qrcode.html — no advisories listed for the `qrcode` crate as of 2026-06-29.
+- No malicious-behavior or supply-chain-compromise history found for `qrcode` or its author (kennytm).
+
+#### Sans-IO compliance
+
+`qr::encode_png` is pure: takes `&str`, returns `Result<Vec<u8>>`. No filesystem, no rand, no clock. Consistent with the existing `decode_image_bytes` pure function in the same module. The only I/O-adjacent behavior is `ImageBuffer` and `DynamicImage::write_to` (in-memory cursor), both of which are pure byte-buffer operations. The `qrcode` crate itself is also pure (bit manipulation only).
+
+#### Risk assessment
+
+**Low.** Single-author, individual-maintained, but well-known (1.5M+ downloads), no advisories, MIT/Apache-2.0 dual-licensed, zero transitive deps under `default-features=false`. Scope is narrow (QR matrix encoding — no crypto, no I/O, no FFI). The `passively-maintained` badge is informational; the 0.14.x line is current and stable. No action required beyond the standard lockfile + `cargo audit` monitoring.

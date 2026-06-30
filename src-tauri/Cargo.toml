@@ -20,6 +20,7 @@ sha2 = "0.10"
 base32 = "0.5"
 rqrr = "0.8"
 image = "0.25"
+qrcode = { version = "0.14", default-features = false }
 prost = "0.13"
 zeroize = { version = "1", features = ["derive"] }
 uuid = { version = "1", features = ["v4"] }
