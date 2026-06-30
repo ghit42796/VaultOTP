@@ -1,7 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
   import { save, open } from "@tauri-apps/plugin-dialog";
-  import { exportBackup, importBackup } from "../lib/ipc";
+  import { exportBackup, importBackup, vaultMode, addKeyfile, removeKeyfile, generateKeyfile, currentVaultPath, saveVaultAs, changePassword } from "../lib/ipc";
+  import { passwordStrength } from "../lib/display";
   import { loadSettings, saveSettings } from "../lib/settings";
   import { loadThemePref, saveThemePref, applyTheme, type ThemePref } from "../lib/theme";
   const dispatch = createEventDispatcher();
@@ -24,6 +25,73 @@
     if (!path || Array.isArray(path)) return;
     try { const n = await importBackup(path, pw); status = `Imported ${n}.`; dispatch("changed"); }
     catch (e) { error = String(e); }
+  }
+
+  let secMode: "password" | "keyfile" | "composite" = "password";
+  let secPw = "", secStatus = "", secError = "";
+
+  async function refreshMode() { try { secMode = await vaultMode(); } catch {} }
+  refreshMode();
+
+  async function doGenerateKeyfile(): Promise<string | null> {
+    const path = await save({ defaultPath: "vaultotp.vaultkey" });
+    if (typeof path !== "string") return null;
+    await generateKeyfile(path);
+    return path;
+  }
+
+  async function addGenerated() {
+    secError = ""; secStatus = "";
+    if (!secPw) { secError = "Enter your current password"; return; }
+    try {
+      const path = await doGenerateKeyfile();
+      if (!path) return;
+      await addKeyfile(secPw, path); secStatus = "Key file added."; secPw = ""; await refreshMode();
+    } catch (e) { secError = String(e); }
+  }
+
+  async function addExisting() {
+    secError = ""; secStatus = "";
+    if (!secPw) { secError = "Enter your current password"; return; }
+    const path = await open({ multiple: false });
+    if (typeof path !== "string") return;
+    try { await addKeyfile(secPw, path); secStatus = "Key file added."; secPw = ""; await refreshMode(); }
+    catch (e) { secError = String(e); }
+  }
+
+  async function dropKeyfile() {
+    secError = ""; secStatus = "";
+    if (!secPw) { secError = "Enter your current password"; return; }
+    const path = await open({ multiple: false });
+    if (typeof path !== "string") { secError = "Select your current key file to confirm"; return; }
+    try { await removeKeyfile(secPw, path); secStatus = "Key file removed."; secPw = ""; await refreshMode(); }
+    catch (e) { secError = String(e); }
+  }
+
+  let vaultPath = "";
+  let vaultStatus = "", vaultError = "";
+  (async () => { try { vaultPath = await currentVaultPath(); } catch {} })();
+
+  async function doSaveAs() {
+    vaultError = ""; vaultStatus = "";
+    const p = await save({ defaultPath: "vault-copy.bin" });
+    if (typeof p !== "string") return;
+    try { await saveVaultAs(p); vaultStatus = "Copy saved."; }
+    catch (e) { vaultError = String(e); }
+  }
+
+  let cpCurrent = "", cpNew = "", cpConfirm = "", cpStatus = "", cpError = "";
+  $: cpStrength = passwordStrength(cpNew);
+
+  async function doChangePassword() {
+    cpError = ""; cpStatus = "";
+    if (cpNew.length < 8) { cpError = "New password must be at least 8 characters"; return; }
+    if (cpNew !== cpConfirm) { cpError = "New passwords do not match"; return; }
+    try {
+      await changePassword(cpCurrent, undefined, cpNew, undefined);
+      cpStatus = "Password changed ✓";
+      cpCurrent = ""; cpNew = ""; cpConfirm = "";
+    } catch (e) { cpError = String(e); }
   }
 </script>
 
@@ -94,6 +162,70 @@
       </div>
     </section>
 
+    <div class="divider"></div>
+
+    <section class="setting">
+      <h3>Security</h3>
+      <p class="hint">Mode: {secMode === "composite" ? "Password + key file" : secMode === "keyfile" ? "Key file only" : "Password only"}</p>
+      <input class="vo-field" type="password" bind:value={secPw} placeholder="Current password" />
+      {#if secMode === "password"}
+        <div class="row">
+          <button class="vo-ghost" on:click={addGenerated}>Generate key file…</button>
+          <button class="vo-ghost" on:click={addExisting}>Use existing file…</button>
+        </div>
+      {/if}
+      {#if secMode === "composite"}
+        <div class="row"><button class="vo-ghost" on:click={dropKeyfile}>Remove key file…</button></div>
+      {/if}
+      <div aria-live="polite" aria-atomic="true">
+        {#if secError}<p class="err">{secError}</p>{/if}
+        {#if secStatus}<p class="hint">{secStatus}</p>{/if}
+      </div>
+      <p class="hint">If you lose all required credentials, the vault cannot be recovered. A generated key file has stronger entropy than an existing file.</p>
+    </section>
+
+    <div class="divider"></div>
+
+    {#if secMode === "password"}
+      <section class="setting">
+        <h3>Master password</h3>
+        <p class="hint">Re-enter your current password, then choose a new one.</p>
+        <div class="vo-group">
+          <label class="vo-label" for="cp-cur">Current password</label>
+          <input id="cp-cur" class="vo-field" type="password" bind:value={cpCurrent} />
+        </div>
+        <div class="vo-group">
+          <label class="vo-label" for="cp-new">New password</label>
+          <input id="cp-new" class="vo-field" type="password" bind:value={cpNew} />
+          <div class="meter" aria-hidden="true"><i style="width:{cpStrength * 25}%"></i></div>
+        </div>
+        <div class="vo-group">
+          <label class="vo-label" for="cp-conf">Confirm new password</label>
+          <input id="cp-conf" class="vo-field" type="password" bind:value={cpConfirm} />
+        </div>
+        <button class="vo-primary" on:click={doChangePassword}>Change password</button>
+        <div aria-live="polite" aria-atomic="true">
+          {#if cpError}<p class="vo-err">{cpError}</p>{/if}
+          {#if cpStatus}<p class="ok">{cpStatus}</p>{/if}
+        </div>
+      </section>
+
+      <div class="divider"></div>
+    {/if}
+
+    <section class="setting">
+      <h3>Vault</h3>
+      <p class="hint" title={vaultPath}>Current: {vaultPath}</p>
+      <div class="row">
+        <button class="vo-ghost" on:click={doSaveAs}>Save a copy as…</button>
+        <button class="vo-ghost" on:click={() => dispatch("switchVault")}>Open a different vault…</button>
+      </div>
+      <div aria-live="polite" aria-atomic="true">
+        {#if vaultError}<p class="err">{vaultError}</p>{/if}
+        {#if vaultStatus}<p class="hint">{vaultStatus}</p>{/if}
+      </div>
+    </section>
+
     <button class="vo-ghost close-btn" on:click={() => dispatch("close")}>Close</button>
   </div>
 </div>
@@ -135,5 +267,13 @@
 
   .ok { color: var(--success); font-size: 13px; margin: 0; }
 
+  .hint { font-size: 12px; color: var(--text-muted); margin: 0; }
+  .err { font-size: 12px; color: var(--error, #e53e3e); margin: 0; }
+
+  .setting h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text); }
+
   .close-btn { width: 100%; }
+
+  .meter { width: 100%; height: 6px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
+  .meter > i { display: block; height: 100%; background: var(--success); transition: width .15s; }
 </style>

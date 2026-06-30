@@ -24,18 +24,10 @@ export function groupCode(code: string): string {
   return code;
 }
 
-export function ringCircumference(radius: number): number {
-  return 2 * Math.PI * radius;
-}
-
-/**
- * stroke-dashoffset for the progress ring: 0 when full (remaining = period),
- * full circumference when empty (remaining = 0). period <= 0 -> empty.
- */
-export function ringDashoffset(remaining: number, period: number, radius: number): number {
-  const c = ringCircumference(radius);
-  const frac = period > 0 ? Math.max(0, Math.min(1, remaining / period)) : 0;
-  return c * (1 - frac);
+/** Fraction of the period remaining, clamped to 0..1. period <= 0 -> 0. */
+export function barFraction(remaining: number, period: number): number {
+  if (period <= 0) return 0;
+  return Math.max(0, Math.min(1, remaining / period));
 }
 
 /** Heuristic password strength, 0..4 (length + character variety). */

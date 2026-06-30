@@ -1,6 +1,6 @@
 use crate::error::{AppError, Result};
 use crate::model::Account;
-use crate::vault::crypto::{decrypt, encrypt, VaultHeader};
+use crate::vault::crypto::{decrypt, encrypt, Mode, VaultHeader};
 use crate::vault::kdf::{derive_key, KdfParams};
 
 /// Pure: encrypt accounts into a standalone backup blob. salt + nonce injected.
@@ -12,7 +12,9 @@ pub fn export_encrypted(
 ) -> Result<Vec<u8>> {
     let kdf = KdfParams::default();
     let key: [u8; 32] = *derive_key(password, &salt, &kdf)?;
-    let header = VaultHeader { version: 1, kdf, salt, nonce };
+    // Backup blobs are always password-protected by design (export takes a `password`,
+    // never a key file), so `Mode::Password` here is a permanent invariant, not a placeholder.
+    let header = VaultHeader { version: 1, mode: Mode::Password, kdf, salt, nonce };
     let plaintext = serde_json::to_vec(accounts).map_err(|_| AppError::Crypto)?;
     encrypt(&key, &header, &plaintext)
 }

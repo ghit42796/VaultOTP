@@ -5,6 +5,16 @@ use aes_gcm::{Aes256Gcm, Key, Nonce};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
+/// Which credential(s) unlock a vault. Stored in the header and authenticated as AAD.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    #[default]
+    Password,
+    Keyfile,
+    Composite,
+}
+
 pub const MAGIC: &[u8] = b"ATOTP1\0";
 
 // Compile-time guard: file-layout comment says MAGIC is 7 bytes.
@@ -13,6 +23,9 @@ const _: () = assert!(MAGIC.len() == 7);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VaultHeader {
     pub version: u16,
+    /// Credential mode. `#[serde(default)]` makes pre-`mode` (v1) files parse as `Password`.
+    #[serde(default)]
+    pub mode: Mode,
     pub kdf: KdfParams,
     pub salt: [u8; 16],
     /// Caller MUST supply a cryptographically random nonce, unique per (key, vault write).
@@ -74,6 +87,19 @@ pub fn encrypt(key: &[u8; 32], header: &VaultHeader, plaintext: &[u8]) -> Result
     Ok(out)
 }
 
+/// Decrypt a vault file given an already-derived 32-byte content key.
+/// Verifies the AEAD tag against the header AAD. `Err(AppError::Crypto)` on any failure.
+pub fn decrypt_with_derived_key(key: &[u8; 32], file_bytes: &[u8]) -> Result<Vec<u8>> {
+    let (header, header_end) = parse_header(file_bytes)?;
+    let header_json = &file_bytes[MAGIC.len() + 4..header_end];
+    let associated = aad(header_json);
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
+    let nonce = Nonce::from_slice(&header.nonce);
+    cipher
+        .decrypt(nonce, Payload { msg: &file_bytes[header_end..], aad: &associated })
+        .map_err(|_| AppError::Crypto)
+}
+
 /// Decrypt a vault file given the user password. Derives the key from the
 /// embedded KDF parameters and salt, then verifies the AEAD tag.
 ///
@@ -125,7 +151,7 @@ mod tests {
         let salt = [9u8; 16];
         let nonce = [3u8; 12];
         let key = derive_key(b"masterpw", &salt, &kdf).unwrap();
-        (VaultHeader { version: 1, kdf, salt, nonce }, key)
+        (VaultHeader { version: 1, mode: Mode::Password, kdf, salt, nonce }, key)
     }
 
     #[test]
@@ -150,6 +176,19 @@ mod tests {
         let last = file.len() - 1;
         file[last] ^= 0x01;
         assert!(matches!(decrypt(b"masterpw", &file), Err(AppError::Crypto)));
+    }
+
+    #[test]
+    fn header_without_mode_field_defaults_to_password() {
+        // A v1 header JSON has no "mode" key; it must parse as Mode::Password.
+        let v1_json = br#"{"version":1,"kdf":{"mem_kib":8192,"iterations":1,"parallelism":1},"salt":[9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9],"nonce":[3,3,3,3,3,3,3,3,3,3,3,3]}"#;
+        let h: VaultHeader = serde_json::from_slice(v1_json).unwrap();
+        assert_eq!(h.mode, Mode::Password);
+    }
+
+    #[test]
+    fn mode_serializes_lowercase() {
+        assert_eq!(serde_json::to_string(&Mode::Composite).unwrap(), "\"composite\"");
     }
 
     #[test]

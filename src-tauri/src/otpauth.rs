@@ -89,9 +89,71 @@ pub fn parse_otpauth(uri: &str) -> Result<Account> {
     })
 }
 
+/// Percent-encode all bytes except RFC 3986 unreserved (ALPHA / DIGIT / -._~).
+fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for &b in s.as_bytes() {
+        let unreserved = b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~');
+        if unreserved {
+            out.push(b as char);
+        } else {
+            out.push('%');
+            out.push_str(&format!("{:02X}", b));
+        }
+    }
+    out
+}
+
+/// Build an `otpauth://totp/...` URI for an account. Inverse of `parse_otpauth`.
+pub fn build_otpauth(a: &Account) -> String {
+    let label_path = if a.issuer.is_empty() {
+        percent_encode(&a.label)
+    } else {
+        format!("{}:{}", percent_encode(&a.issuer), percent_encode(&a.label))
+    };
+    let algo = match a.algorithm {
+        Algorithm::Sha1 => "SHA1",
+        Algorithm::Sha256 => "SHA256",
+        Algorithm::Sha512 => "SHA512",
+    };
+    let mut uri = format!("otpauth://totp/{}?secret={}", label_path, a.secret);
+    if !a.issuer.is_empty() {
+        uri.push_str(&format!("&issuer={}", percent_encode(&a.issuer)));
+    }
+    uri.push_str(&format!("&algorithm={}&digits={}&period={}", algo, a.digits, a.period));
+    uri
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn build_then_parse_round_trips() {
+        let mut a = Account::new("GitHub".into(), "alice@example.com".into(), "JBSWY3DPEHPK3PXP".into());
+        a.algorithm = Algorithm::Sha256;
+        a.digits = 8;
+        a.period = 60;
+        let uri = build_otpauth(&a);
+        assert!(uri.starts_with("otpauth://totp/"));
+        let back = parse_otpauth(&uri).unwrap();
+        assert_eq!(back.issuer, "GitHub");
+        assert_eq!(back.label, "alice@example.com");
+        assert_eq!(back.secret, "JBSWY3DPEHPK3PXP");
+        assert_eq!(back.algorithm, Algorithm::Sha256);
+        assert_eq!(back.digits, 8);
+        assert_eq!(back.period, 60);
+    }
+
+    #[test]
+    fn build_without_issuer_omits_issuer_param() {
+        let a = Account::new(String::new(), "solo".into(), "JBSWY3DPEHPK3PXP".into());
+        let uri = build_otpauth(&a);
+        assert!(!uri.contains("issuer="));
+        let back = parse_otpauth(&uri).unwrap();
+        assert_eq!(back.label, "solo");
+        assert_eq!(back.issuer, "");
+    }
 
     #[test]
     fn parses_full_uri() {

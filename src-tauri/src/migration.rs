@@ -84,6 +84,73 @@ pub fn parse_migration(uri: &str) -> Result<Vec<Account>> {
     Ok(accounts)
 }
 
+/// Standard-alphabet Base64 encoder (module scope; shared by build_migration and tests).
+fn base64_encode(data: &[u8]) -> String {
+    const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for chunk in data.chunks(3) {
+        let b = [chunk[0], *chunk.get(1).unwrap_or(&0), *chunk.get(2).unwrap_or(&0)];
+        out.push(T[(b[0] >> 2) as usize] as char);
+        out.push(T[(((b[0] & 0x03) << 4) | (b[1] >> 4)) as usize] as char);
+        if chunk.len() > 1 { out.push(T[(((b[1] & 0x0f) << 2) | (b[2] >> 6)) as usize] as char); } else { out.push('='); }
+        if chunk.len() > 2 { out.push(T[(b[2] & 0x3f) as usize] as char); } else { out.push('='); }
+    }
+    out
+}
+
+/// Percent-encode the base64 `data` value so it survives a URL round-trip
+/// (encodes +, /, = and any non-unreserved byte). `crate::otpauth_decode`
+/// reverses this on parse.
+fn percent_encode_b64(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for &b in s.as_bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push('%');
+            out.push_str(&format!("{:02X}", b));
+        }
+    }
+    out
+}
+
+/// Build a single-batch Google Authenticator migration URI for `accounts` (TOTP).
+pub fn build_migration(accounts: &[Account]) -> Result<String> {
+    if accounts.is_empty() {
+        return Err(AppError::Migration);
+    }
+    let mut params = Vec::with_capacity(accounts.len());
+    for a in accounts {
+        let secret = crate::secret::decode_secret(&a.secret)?;
+        let algorithm = match a.algorithm {
+            Algorithm::Sha1 => 1,
+            Algorithm::Sha256 => 2,
+            Algorithm::Sha512 => 3,
+        };
+        let digits = if a.digits == 8 { 2 } else { 1 };
+        params.push(OtpParameters {
+            secret,
+            name: a.label.clone(),
+            issuer: a.issuer.clone(),
+            algorithm,
+            digits,
+            r#type: 2, // TOTP
+            counter: 0,
+        });
+    }
+    let payload = MigrationPayload {
+        otp_parameters: params,
+        version: 1,
+        batch_size: 1,
+        batch_index: 0,
+        batch_id: 0,
+    };
+    let mut raw = Vec::new();
+    payload.encode(&mut raw).map_err(|_| AppError::Migration)?;
+    let b64 = base64_encode(&raw);
+    Ok(format!("otpauth-migration://offline?data={}", percent_encode_b64(&b64)))
+}
+
 /// Minimal standard Base64 decoder (GA uses standard alphabet, may be URL-encoded first).
 fn base64_decode(s: &str) -> Option<Vec<u8>> {
     const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -198,16 +265,19 @@ mod tests {
         assert_eq!(accounts[0].period, 30);
     }
 
-    fn base64_encode(data: &[u8]) -> String {
-        const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        let mut out = String::new();
-        for chunk in data.chunks(3) {
-            let b = [chunk[0], *chunk.get(1).unwrap_or(&0), *chunk.get(2).unwrap_or(&0)];
-            out.push(T[(b[0] >> 2) as usize] as char);
-            out.push(T[(((b[0] & 0x03) << 4) | (b[1] >> 4)) as usize] as char);
-            if chunk.len() > 1 { out.push(T[(((b[1] & 0x0f) << 2) | (b[2] >> 6)) as usize] as char); } else { out.push('='); }
-            if chunk.len() > 2 { out.push(T[(b[2] & 0x3f) as usize] as char); } else { out.push('='); }
-        }
-        out
+    #[test]
+    fn build_then_parse_migration_round_trips() {
+        let mut a = Account::new("Example".into(), "alice".into(),
+            base32::encode(base32::Alphabet::Rfc4648 { padding: false }, &[0x48,0x65,0x6c,0x6c,0x6f]));
+        a.algorithm = Algorithm::Sha256;
+        a.digits = 8;
+        let uri = build_migration(&[a]).unwrap();
+        assert!(uri.starts_with("otpauth-migration://offline?data="));
+        let back = parse_migration(&uri).unwrap();
+        assert_eq!(back.len(), 1);
+        assert_eq!(back[0].issuer, "Example");
+        assert_eq!(back[0].label, "alice");
+        assert_eq!(back[0].algorithm, Algorithm::Sha256);
+        assert_eq!(back[0].digits, 8);
     }
 }

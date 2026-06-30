@@ -1,23 +1,26 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import VaultPicker from "./routes/VaultPicker.svelte";
   import Unlock from "./routes/Unlock.svelte";
   import Main from "./routes/Main.svelte";
   import { isUnlocked, onLocked } from "./lib/ipc";
   import type { UnlistenFn } from "@tauri-apps/api/event";
 
-  let unlocked = false;
+  type View = "picker" | "unlock" | "main";
+  let view: View = "picker";
   let unlistenLocked: UnlistenFn | undefined;
 
   onMount(async () => {
-    unlocked = await isUnlocked();
-    unlistenLocked = await onLocked(() => { unlocked = false; });
+    if (await isUnlocked()) view = "main";
+    unlistenLocked = await onLocked(() => { view = "unlock"; });
   });
-
   onDestroy(() => { unlistenLocked?.(); });
 </script>
 
-{#if unlocked}
-  <Main on:locked={() => (unlocked = false)} />
+{#if view === "main"}
+  <Main on:locked={() => (view = "unlock")} on:switchVault={() => (view = "picker")} />
+{:else if view === "unlock"}
+  <Unlock on:unlocked={() => (view = "main")} on:switch={() => (view = "picker")} />
 {:else}
-  <Unlock on:unlocked={() => (unlocked = true)} />
+  <VaultPicker on:selected={() => (view = "unlock")} />
 {/if}
