@@ -6,6 +6,7 @@
   import Settings from "../components/Settings.svelte";
   import type { CodeView } from "../lib/types";
   import { currentCodes, removeAccount, lock, onTick, exportSecrets, reorderAccounts, type ExportFormat } from "../lib/ipc";
+  import { moveItem, restoreOrder } from "../lib/reorder";
   import { loadSettings } from "../lib/settings";
   import { open, save } from "@tauri-apps/plugin-dialog";
 
@@ -24,9 +25,9 @@
 
   let reorderMode = false;
   let dragIndex: number | null = null;
-  let dragging = false;
+  let orderSnapshot: string[] = [];
 
-  async function refresh() { if (dragging) return; codes = await currentCodes(); }
+  async function refresh() { if (reorderMode) return; codes = await currentCodes(); }
 
   function resetIdle() {
     clearTimeout(idleTimer);
@@ -68,31 +69,41 @@
     }
   }
 
-  function toggleReorderMode() {
-    reorderMode = !reorderMode;
-    if (reorderMode) { selectMode = false; selected = new Set(); }
+  function enterReorderMode() {
+    reorderMode = true;
+    selectMode = false;
+    selected = new Set();
     dragIndex = null;
-    dragging = false;
+    orderSnapshot = codes.map((c) => c.id);
   }
 
-  function onDragStart(i: number) { dragIndex = i; dragging = true; }
+  function onDragStart(i: number) { dragIndex = i; }
 
   function onDragOver(e: DragEvent, i: number) {
     e.preventDefault();
     if (dragIndex === null || dragIndex === i) return;
-    const arr = [...codes];
-    const [moved] = arr.splice(dragIndex, 1);
-    arr.splice(i, 0, moved);
-    codes = arr;
+    codes = moveItem(codes, dragIndex, i);
     dragIndex = i;
   }
 
-  async function persistOrder() {
-    if (!dragging) return;
-    dragging = false;
-    dragIndex = null;
+  function endDrag() { dragIndex = null; }
+
+  async function confirmReorder() {
+    // Persist while still in reorder mode so a tick-refresh can't reload
+    // the stale order between exit and save.
     try { await reorderAccounts(codes.map((c) => c.id)); }
-    catch (_) { /* ignore; refresh restores the persisted order */ }
+    catch (_) { /* ignore; refresh below restores the persisted order */ }
+    reorderMode = false;
+    dragIndex = null;
+    await refresh();
+  }
+
+  async function cancelReorder() {
+    // Nothing was persisted; restore the on-screen order, then let refresh
+    // reload live codes (backend still holds the original order).
+    codes = restoreOrder(codes, orderSnapshot);
+    reorderMode = false;
+    dragIndex = null;
     await refresh();
   }
 
@@ -140,10 +151,11 @@
         {selectMode ? "✕" : "☑"}
       </button>
     {/if}
-    {#if !selectMode}
-      <button class="tool" class:tool-active={reorderMode} on:click={toggleReorderMode} title={reorderMode ? "Done reordering" : "Reorder accounts"} aria-label={reorderMode ? "Done reordering" : "Reorder accounts"}>
-        {reorderMode ? "✓" : "⇅"}
-      </button>
+    {#if reorderMode}
+      <button class="tool tool-active" on:click={confirmReorder} title="Save order" aria-label="Save order">✓</button>
+      <button class="tool" on:click={cancelReorder} title="Cancel reordering" aria-label="Cancel reordering">✕</button>
+    {:else if !selectMode}
+      <button class="tool" on:click={enterReorderMode} title="Reorder accounts" aria-label="Reorder accounts">⇅</button>
     {/if}
   </div>
 </header>
@@ -173,8 +185,8 @@
         draggable="true"
         on:dragstart={() => onDragStart(i)}
         on:dragover={(e) => onDragOver(e, i)}
-        on:drop={persistOrder}
-        on:dragend={persistOrder}
+        on:drop={endDrag}
+        on:dragend={endDrag}
       >
         <AccountCard {item} reorderMode={true} />
       </div>
