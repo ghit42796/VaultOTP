@@ -10,7 +10,7 @@
     "beforeBuildCommand": "npm run build"
   },
   "app": {
-    "windows": [{ "label": "main", "title": "VaultOTP", "width": 420, "height": 680, "resizable": true }],
+    "windows": [{ "label": "main", "title": "VaultOTP", "width": 420, "height": 680, "resizable": true, "dragDropEnabled": false }],
     "security": { "csp": null }
   },
   "plugins": {},
